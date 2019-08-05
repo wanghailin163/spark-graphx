@@ -1,7 +1,7 @@
 package com.myself
 
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.graphx.{Edge, Graph, VertexId}
+import org.apache.spark.graphx.{Edge, Graph, VertexId, VertexRDD}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -98,6 +98,53 @@ object GraphXOperate {
     println("子图所有的边")
     subGraph.edges.collect().foreach(println)
 
+    /**
+      * 连接操作
+      */
+    println("连接操作")
+    println("******************************************************")
+
+    val inDegrees: VertexRDD[Int] = graph.inDegrees
+    //创建一个新图，顶点VD的数据类型为User，并从graph做类型转换
+    val initialUserGraph = graph.mapVertices{
+      case (id,(name,age)) => User(name,age,0,0)
+    }
+    //initialUserGraph与inDeg,outDegree进行连接，并修改initialUserGraph中inDeg值和outDeg
+    val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees){
+      case (id,u,inDegOpt) => User(u.name,u.age,inDegOpt.getOrElse(0),u.outDeg)
+    }.outerJoinVertices(initialUserGraph.outDegrees){
+      case (id,u,outDegOpt) => User(u.name,u.age,u.inDeg,outDegOpt.getOrElse(0))
+    }
+    println("连接图的属性")
+    userGraph.vertices.foreach(println)
+    println("出度和入度相同的人员")
+    userGraph.vertices.filter{
+      case (id,u)=>u.inDeg==u.outDeg
+    }.collect.foreach(println)
+
+    /**
+      * 聚合操作
+      */
+    /*println("聚合操作")
+    println("******************************************************")
+    println("找出年纪最大的追求者")
+    val oldestFollower = userGraph.mapReduceTriplets[(String,Int)](
+      //将源顶点的属性发给目标顶点，map过程
+      edge => Iterator((edge.dstId,(edge.srcAttr.name,edge,srcAttr.age))),
+      //得到最大追求者，reduce过程
+      (a,b) => if(a._2>b._2) a else b
+    )
+    userGraph.vertices.leftJoin(oldestFollower){
+      (id,user,optOldestFollower) => oldestFollower match {
+        case None => s"${user.name} does not have any folleowers."
+        case Some((name,age))=>s"${name} is the oldest follower of ${user.name}"
+      }
+    }.collect.foreach(println)*/
+
+
+
   }
+
+  case class User(name: String,age: Int,inDeg: Int,outDeg: Int)
 
 }
